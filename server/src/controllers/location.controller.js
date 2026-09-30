@@ -1,0 +1,2 @@
+import axios from 'axios';
+export async function searchLocations(req,res){try{const q=req.query.q?.trim();if(!q||q.length<3)return res.json([]);const r=await axios.get('https://nominatim.openstreetmap.org/search',{params:{q,format:'jsonv2',limit:6,addressdetails:1,countrycodes:'in'},headers:{'User-Agent':'ComplainAI-CollegeProject/1.0'}});res.json(r.data.map(x=>({placeId:x.place_id,displayName:x.display_name,address:x.display_name,latitude:Number(x.lat),longitude:Number(x.lon)})));}catch(e){res.status(502).json({message:'Location search temporarily unavailable'});}}

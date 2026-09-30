@@ -1,0 +1,657 @@
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  BarChart3,
+  Check,
+  Forward,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  UserPlus,
+  Users,
+  X
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer
+} from "recharts";
+import { api } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
+
+const CATEGORIES = [
+  "ROADS",
+  "EDUCATION",
+  "HEALTH",
+  "ELECTRICITY",
+  "WATER",
+  "SAFETY"
+];
+
+function Stat({ n, t }) {
+  return (
+    <div className="stat-card">
+      <strong>{n}</strong>
+      <span>{t}</span>
+    </div>
+  );
+}
+
+export default function Admin() {
+  const { user } = useAuth();
+
+  const [data, setData] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [admins, setAdmins] = useState([]);
+
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminActionLoading, setAdminActionLoading] = useState(null);
+
+  const [showAdminForm, setShowAdminForm] = useState(false);
+
+  const [adminForm, setAdminForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    category: "ROADS"
+  });
+
+  const [adminError, setAdminError] = useState("");
+  const [adminSuccess, setAdminSuccess] = useState("");
+
+  const loadComplaints = async () => {
+    setLoading(true);
+
+    try {
+      const [complaints, analytics] = await Promise.all([
+        api.get("/complaints/admin/all"),
+        api.get("/complaints/analytics")
+      ]);
+
+      setData(complaints.data);
+      setStats(analytics.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAdmins = async () => {
+    if (user?.role !== "SUPER_ADMIN") return;
+
+    setAdminLoading(true);
+
+    try {
+      const response = await api.get("/admins");
+      setAdmins(response.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadComplaints();
+    loadAdmins();
+  }, [user]);
+
+  const toggleAdminStatus = async (admin) => {
+    if (admin.role === "SUPER_ADMIN") {
+      return;
+    }
+
+    const action = admin.isActive ? "deactivate" : "activate";
+
+    if (
+      action === "deactivate" &&
+      !window.confirm(
+        `Deactivate ${admin.name}? They will no longer be able to log in.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setAdminActionLoading(admin._id);
+      setAdminError("");
+
+      await api.patch(`/admins/${admin._id}/${action}`);
+
+      await loadAdmins();
+    } catch (error) {
+      setAdminError(
+        error.response?.data?.message ||
+          `Could not ${action} administrator.`
+      );
+    } finally {
+      setAdminActionLoading(null);
+    }
+  };
+
+  const filtered = useMemo(
+    () =>
+      data.filter((c) =>
+        `${c.ticketId} ${c.title} ${c.category} ${c.status}`
+          .toLowerCase()
+          .includes(q.toLowerCase())
+      ),
+    [data, q]
+  );
+
+  const act = async (id, type) => {
+    try {
+      if (type === "verify") {
+        await api.patch(`/complaints/${id}/verify`, {
+          approved: true
+        });
+      }
+
+      if (type === "forward") {
+        await api.patch(`/complaints/${id}/forward`, {});
+      }
+
+      await loadComplaints();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const createAdmin = async (e) => {
+    e.preventDefault();
+
+    setAdminError("");
+    setAdminSuccess("");
+
+    try {
+      await api.post("/admins", adminForm);
+
+      setAdminSuccess(
+        `${adminForm.category} administrator created successfully.`
+      );
+
+      setAdminForm({
+        name: "",
+        email: "",
+        password: "",
+        category: "ROADS"
+      });
+
+      await loadAdmins();
+    } catch (error) {
+      setAdminError(
+        error.response?.data?.message ||
+          "Could not create administrator."
+      );
+    }
+  };
+
+  return (
+    <div className="page admin-page">
+
+      {/* HEADER */}
+      <div className="page-head">
+        <div>
+          <div className="eyebrow">
+            <span />
+            GOVERNMENT ADMINISTRATION
+          </div>
+
+          <h1>Command center</h1>
+
+          <p>
+            {user.role === "SUPER_ADMIN"
+              ? "Central oversight across all departments."
+              : `${user.category} category queue.`}
+          </p>
+        </div>
+
+        <button
+          className="secondary"
+          onClick={loadComplaints}
+        >
+          <RefreshCw size={17} />
+          Refresh
+        </button>
+      </div>
+
+      {/* STATS */}
+      {stats && (
+        <>
+          <div className="stats">
+            <Stat
+              n={stats.total}
+              t="Total complaints"
+            />
+
+            <Stat
+              n={
+                data.filter(
+                  (x) =>
+                    x.status === "UNDER_REVIEW" ||
+                    x.status === "AI_ANALYZED"
+                ).length
+              }
+              t="Awaiting review"
+            />
+
+            <Stat
+              n={
+                data.filter(
+                  (x) => x.status === "FORWARDED"
+                ).length
+              }
+              t="Forwarded"
+            />
+
+            <Stat
+              n={
+                data.filter(
+                  (x) => x.priority === "CRITICAL"
+                ).length
+              }
+              t="Critical"
+            />
+          </div>
+
+          <div className="analytics-card">
+            <div>
+              <h3>
+                <BarChart3 />
+                Complaint volume
+              </h3>
+
+              <p>
+                Category distribution for your authorized scope.
+              </p>
+            </div>
+
+            <div className="chart">
+              <ResponsiveContainer
+                width="100%"
+                height={190}
+              >
+                <BarChart
+                  data={stats.byCategory.map((x) => ({
+                    name: x._id,
+                    count: x.count
+                  }))}
+                >
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11 }}
+                  />
+
+                  <YAxis allowDecimals={false} />
+
+                  <Tooltip />
+
+                  <Bar dataKey="count" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* SUPER ADMIN MANAGEMENT */}
+      {user.role === "SUPER_ADMIN" && (
+        <section className="admin-management">
+
+          <div className="management-header">
+            <div>
+              <div className="eyebrow">
+                <span />
+                ADMINISTRATION
+              </div>
+
+              <h2>
+                Category administrators
+              </h2>
+
+              <p>
+                Create and manage administrators responsible
+                for individual government services.
+              </p>
+            </div>
+
+            <button
+              className="primary"
+              onClick={() => {
+                setShowAdminForm(!showAdminForm);
+                setAdminError("");
+                setAdminSuccess("");
+              }}
+            >
+              {showAdminForm ? (
+                <>
+                  <X size={18} />
+                  Close
+                </>
+              ) : (
+                <>
+                  <UserPlus size={18} />
+                  Create Admin
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* CREATE ADMIN FORM */}
+          {showAdminForm && (
+            <form
+              className="form-card admin-create-form"
+              onSubmit={createAdmin}
+            >
+              <h3>
+                <UserPlus size={20} />
+                Create Category Administrator
+              </h3>
+
+              {adminError && (
+                <div className="error">
+                  {adminError}
+                </div>
+              )}
+
+              {adminSuccess && (
+                <div className="success">
+                  {adminSuccess}
+                </div>
+              )}
+
+              <div className="admin-form-grid">
+
+                <label>
+                  Full name
+
+                  <input
+                    required
+                    value={adminForm.name}
+                    onChange={(e) =>
+                      setAdminForm({
+                        ...adminForm,
+                        name: e.target.value
+                      })
+                    }
+                    placeholder="e.g. Ahmed Khan"
+                  />
+                </label>
+
+                <label>
+                  Email
+
+                  <input
+                    type="email"
+                    required
+                    value={adminForm.email}
+                    onChange={(e) =>
+                      setAdminForm({
+                        ...adminForm,
+                        email: e.target.value
+                      })
+                    }
+                    placeholder="admin@example.gov"
+                  />
+                </label>
+
+                <label>
+                  Temporary password
+
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={adminForm.password}
+                    onChange={(e) =>
+                      setAdminForm({
+                        ...adminForm,
+                        password: e.target.value
+                      })
+                    }
+                    placeholder="Minimum 8 characters"
+                  />
+                </label>
+
+                <label>
+                  Government service
+
+                  <select
+                    value={adminForm.category}
+                    onChange={(e) =>
+                      setAdminForm({
+                        ...adminForm,
+                        category: e.target.value
+                      })
+                    }
+                  >
+                    {CATEGORIES.map((category) => (
+                      <option
+                        key={category}
+                        value={category}
+                      >
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+              </div>
+
+              <button
+                className="primary"
+                type="submit"
+              >
+                <UserPlus size={18} />
+                Create Administrator
+              </button>
+            </form>
+          )}
+
+          {/* ADMIN LIST */}
+          <div className="admin-list-card">
+
+            <div className="management-title">
+              <div>
+                <h3>
+                  <Users size={20} />
+                  Administrators
+                </h3>
+
+                <p>
+                  Each category administrator can only
+                  access complaints assigned to their service.
+                </p>
+              </div>
+
+              <span>
+                {admins.length} accounts
+              </span>
+            </div>
+
+            {adminLoading ? (
+              <div className="empty">
+                Loading administrators...
+              </div>
+            ) : (
+              <div className="admin-list">
+
+                {admins.map((admin) => (
+                  <div
+                    className="admin-list-row"
+                    key={admin._id}
+                  >
+                    <div className="admin-avatar">
+                      {admin.name?.[0]?.toUpperCase()}
+                    </div>
+
+                    <div className="admin-info">
+                      <strong>{admin.name}</strong>
+                      <span>{admin.email}</span>
+                    </div>
+
+                    <span className="role-pill">
+                      <ShieldCheck size={15} />
+
+                      {admin.role === "SUPER_ADMIN"
+                        ? "Super Admin"
+                        : admin.category}
+                    </span>
+
+                    <span
+                      className="admin-status"
+                      style={{
+                        opacity: admin.isActive ? 1 : 0.55
+                      }}
+                    >
+                      {admin.isActive
+                        ? "Active"
+                        : "Deactivated"}
+                    </span>
+
+                    {admin.role === "CATEGORY_ADMIN" && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={
+                          adminActionLoading === admin._id
+                        }
+                        onClick={() =>
+                          toggleAdminStatus(admin)
+                        }
+                      >
+                        {adminActionLoading === admin._id
+                          ? "Updating..."
+                          : admin.isActive
+                            ? "Deactivate"
+                            : "Reactivate"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {admins.length === 0 && (
+                  <div className="empty">
+                    No administrators found.
+                  </div>
+                )}
+
+              </div>
+            )}
+
+          </div>
+        </section>
+      )}
+
+      {/* COMPLAINT SEARCH */}
+      <div className="toolbar">
+
+        <div className="search-box">
+          <Search />
+
+          <input
+            value={q}
+            onChange={(e) =>
+              setQ(e.target.value)
+            }
+            placeholder="Search tickets, titles, categories..."
+          />
+        </div>
+
+        <span>
+          {filtered.length} complaints
+        </span>
+
+      </div>
+
+      {/* COMPLAINT QUEUE */}
+      <div className="complaint-queue">
+
+        {loading ? (
+          <div className="empty">
+            Loading complaint queue...
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="empty">
+            No complaints found.
+          </div>
+        ) : (
+          filtered.map((c) => (
+            <div
+              className="complaint-row"
+              key={c._id}
+            >
+
+              <div className="complaint-main">
+
+                <div className="ticket">
+                  {c.ticketId}
+                </div>
+
+                <h3>{c.title}</h3>
+
+                <p>
+                  {c.ai?.summary ||
+                    c.description}
+                </p>
+
+                <div className="complaint-meta">
+
+                  <span>
+                    {c.category}
+                  </span>
+
+                  <span>
+                    {c.priority}
+                  </span>
+
+                  <span>
+                    {c.status}
+                  </span>
+
+                </div>
+
+              </div>
+
+              <div className="complaint-actions">
+
+                {c.status === "AI_ANALYZED" && (
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      act(c._id, "verify")
+                    }
+                  >
+                    <Check size={16} />
+                    Approve
+                  </button>
+                )}
+
+                {c.status === "APPROVED" && (
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      act(c._id, "forward")
+                    }
+                  >
+                    <Forward size={16} />
+                    Forward
+                  </button>
+                )}
+
+              </div>
+
+            </div>
+          ))
+        )}
+
+      </div>
+
+    </div>
+  );
+}

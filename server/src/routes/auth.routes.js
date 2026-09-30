@@ -1,0 +1,2 @@
+import {Router} from 'express';import {register,login,forgotPassword,resetPassword} from '../controllers/auth.controller.js';import rateLimit from 'express-rate-limit';
+const router=Router();const otpLimiter=rateLimit({windowMs:15*60*1000,max:10,message:{message:'Too many OTP requests'}});router.post('/register',register);router.post('/login',login);router.post('/forgot-password',otpLimiter,forgotPassword);router.post('/reset-password',otpLimiter,resetPassword);export default router;

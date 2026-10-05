@@ -659,8 +659,9 @@ export default function Admin() {
         </span>
 
       </div>
+
       {/* COMPLAINT QUEUE */}
-      <div className="complaint-table-wrapper">
+      <div className="complaint-queue">
 
         {loading ? (
           <div className="empty">
@@ -671,104 +672,82 @@ export default function Admin() {
             No complaints found.
           </div>
         ) : (
-          <table className="complaint-table">
+          filtered.map((c) => (
+            <div
+              className="complaint-row"
+              key={c._id}
+            >
 
-            <thead>
-              <tr>
-                <th>Ticket ID</th>
-                <th>Complaint</th>
-                <th>Category</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Date & Time</th>
-                <th>Action</th>
-              </tr>
-            </thead>
+              <div className="complaint-main">
 
-            <tbody>
-              {filtered.map((c) => (
-                <tr key={c._id}>
+                <div className="ticket">
+                  {c.ticketId}
+                </div>
 
-                  <td>
-                    <span className="ticket-cell">
-                      {c.ticketId}
-                    </span>
-                  </td>
+                <h3>{c.title}</h3>
 
-                  <td>
-                    <div className="complaint-title-cell">
-                      <strong>{c.title}</strong>
-                      <span>
-                        {c.ai?.summary || c.description}
-                      </span>
-                    </div>
-                  </td>
+                <p>
+                  {c.ai?.summary ||
+                    c.description}
+                </p>
 
-                  <td>
-                    <span className="table-badge category">
-                      {c.category}
-                    </span>
-                  </td>
+<div className="complaint-meta">
 
-                  <td>
-                    <span className="table-badge priority">
-                      {c.priority}
-                    </span>
-                  </td>
+  <span>
+    {c.category}
+  </span>
 
-                  <td>
-                    <span className={`table-status ${c.status?.toLowerCase()}`}>
-                      {c.status?.replaceAll("_", " ")}
-                    </span>
-                  </td>
+  <span>
+    {c.priority}
+  </span>
 
-                  <td className="date-cell">
-                    {new Date(c.createdAt).toLocaleString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit"
-                    })}
-                  </td>
+  <span>
+    {c.status}
+  </span>
 
-                  <td>
-                    <div className="table-actions">
+  <span>
+    {new Date(c.createdAt).toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    })}
+  </span>
 
-                      {c.status === "AI_ANALYZED" && (
-                        <button
-                          className="primary table-action-btn"
-                          onClick={() => act(c._id, "verify")}
-                        >
-                          <Check size={15} />
-                          Approve
-                        </button>
-                      )}
+</div>
+              </div>
 
-                      {c.status === "APPROVED" && (
-                        <button
-                          className="primary table-action-btn"
-                          onClick={() => act(c._id, "forward")}
-                        >
-                          <Forward size={15} />
-                          Forward
-                        </button>
-                      )}
+              <div className="complaint-actions">
 
-                      {!["AI_ANALYZED", "APPROVED"].includes(c.status) && (
-                        <span className="no-action">
-                          —
-                        </span>
-                      )}
+                {c.status === "AI_ANALYZED" && (
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      act(c._id, "verify")
+                    }
+                  >
+                    <Check size={16} />
+                    Approve
+                  </button>
+                )}
 
-                    </div>
-                  </td>
+                {c.status === "APPROVED" && (
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      act(c._id, "forward")
+                    }
+                  >
+                    <Forward size={16} />
+                    Forward
+                  </button>
+                )}
 
-                </tr>
-              ))}
-            </tbody>
+              </div>
 
-          </table>
+            </div>
+          ))
         )}
 
       </div>
